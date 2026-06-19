@@ -137,9 +137,13 @@ struct GameInviteResponse {
 struct GameResponse {
     id: String,
     owner_player_id: String,
+    host_player: PublicPlayerResponse,
     client_game_type: String,
     status: String,
     state: Value,
+    invited_player_count: i64,
+    accepted_invited_player_count: i64,
+    host_can_start: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -230,6 +234,36 @@ async fn main() {
 
 const STALE_GAME_RETENTION_DAYS: i64 = 14;
 const GAME_CLEANUP_INTERVAL_SECS: u64 = 60 * 60;
+const GAME_SELECT_WITH_PROGRESS: &str = r#"
+    SELECT
+        g.id::text,
+        g.owner_player_id::text,
+        p.id::text AS host_player_id,
+        p.username AS host_player_username,
+        p.display_name AS host_player_display_name,
+        g.client_game_type,
+        g.status,
+        g.state,
+        COALESCE(inv.invited_player_count, 0) AS invited_player_count,
+        COALESCE(inv.accepted_invited_player_count, 0) AS accepted_invited_player_count,
+        (
+            g.status = 'pending'
+            AND COALESCE(inv.accepted_invited_player_count, 0) > 0
+        ) AS host_can_start,
+        g.created_at,
+        g.updated_at
+    FROM games g
+    INNER JOIN players p ON p.id = g.owner_player_id
+    LEFT JOIN (
+        SELECT
+            gi.game_id,
+            COUNT(*)::bigint AS invited_player_count,
+            COUNT(*) FILTER (WHERE gi.status = 'accepted')::bigint AS accepted_invited_player_count
+        FROM game_invites gi
+        WHERE gi.game_id IS NOT NULL
+        GROUP BY gi.game_id
+    ) inv ON inv.game_id = g.id
+"#;
 
 async fn create_db_pool() -> Option<PgPool> {
     let database_url = match env::var("DATABASE_URL") {
@@ -626,7 +660,7 @@ async fn create_game(
         Err(err) => return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string()),
     };
 
-    let game_row = match sqlx::query(
+    match sqlx::query(
         r#"
         INSERT INTO games (id, owner_player_id, client_game_type, state)
         VALUES ($1::uuid, $2::uuid, $3, $4)
@@ -640,7 +674,7 @@ async fn create_game(
     .fetch_one(&mut *tx)
     .await
     {
-        Ok(row) => row,
+        Ok(_) => {}
         Err(err) => return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string()),
     };
 
@@ -659,7 +693,12 @@ async fn create_game(
         return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string());
     }
 
-    (StatusCode::CREATED, Json(game_from_row(&game_row))).into_response()
+    let game = match load_game_response(pool, &game_id).await {
+        Ok(game) => game,
+        Err(err) => return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string()),
+    };
+
+    (StatusCode::CREATED, Json(game)).into_response()
 }
 
 async fn search_players(
@@ -707,15 +746,17 @@ async fn list_games(State(state): State<AppState>, headers: HeaderMap) -> Respon
         return api_error(StatusCode::UNAUTHORIZED, "invalid_or_missing_token");
     };
 
-    match sqlx::query(
+    let query = format!(
         r#"
-        SELECT g.id::text, g.owner_player_id::text, g.client_game_type, g.status, g.state, g.created_at, g.updated_at
-        FROM games g
+        {}
         INNER JOIN game_participants gp ON gp.game_id = g.id
         WHERE gp.player_id = $1::uuid
         ORDER BY g.updated_at DESC
         "#,
-    )
+        GAME_SELECT_WITH_PROGRESS
+    );
+
+    match sqlx::query(&query)
     .bind(auth.id)
     .fetch_all(pool)
     .await
@@ -740,19 +781,10 @@ async fn get_game(
         return api_error(StatusCode::NOT_FOUND, "game_not_found");
     }
 
-    let game_row = match sqlx::query(
-        r#"
-        SELECT id::text, owner_player_id::text, client_game_type, status, state, created_at, updated_at
-        FROM games
-        WHERE id = $1::uuid
-        "#,
-    )
-    .bind(&game_id)
-    .fetch_one(pool)
-    .await
-    {
-        Ok(row) => row,
-        Err(_) => return api_error(StatusCode::NOT_FOUND, "game_not_found"),
+    let game = match load_game_response(pool, &game_id).await {
+        Ok(game) => game,
+        Err(sqlx::Error::RowNotFound) => return api_error(StatusCode::NOT_FOUND, "game_not_found"),
+        Err(err) => return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string()),
     };
 
     let turn_rows = match sqlx::query(
@@ -777,7 +809,7 @@ async fn get_game(
     };
 
     Json(GameWithTurnsResponse {
-        game: game_from_row(&game_row),
+        game,
         participants,
         turns: turn_rows.iter().map(turn_from_row).collect(),
     })
@@ -857,26 +889,30 @@ async fn start_game(
         return api_error(StatusCode::BAD_REQUEST, "not_enough_players");
     }
 
-    let row = match sqlx::query(
+    match sqlx::query(
         r#"
         UPDATE games
         SET status = 'active', updated_at = now()
         WHERE id = $1::uuid
           AND owner_player_id = $2::uuid
           AND status = 'pending'
-        RETURNING id::text, owner_player_id::text, client_game_type, status, state, created_at, updated_at
         "#,
     )
     .bind(&game_id)
     .bind(&auth.id)
-    .fetch_one(pool)
+    .execute(pool)
     .await
     {
-        Ok(row) => row,
+        Ok(result) if result.rows_affected() > 0 => {}
         Err(_) => return api_error(StatusCode::BAD_REQUEST, "game_not_pending"),
+        Ok(_) => return api_error(StatusCode::BAD_REQUEST, "game_not_pending"),
     };
 
-    Json(game_from_row(&row)).into_response()
+    match load_game_response(pool, &game_id).await {
+        Ok(game) => Json(game).into_response(),
+        Err(sqlx::Error::RowNotFound) => api_error(StatusCode::NOT_FOUND, "game_not_found"),
+        Err(err) => api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string()),
+    }
 }
 
 async fn submit_turn(
@@ -1105,7 +1141,7 @@ async fn create_game_invite(
         }
     }
 
-    let game_row = match sqlx::query(
+    match sqlx::query(
         r#"
         INSERT INTO games (id, owner_player_id, client_game_type, status, state)
         VALUES ($1::uuid, $2::uuid, $3, 'pending', $4)
@@ -1119,7 +1155,7 @@ async fn create_game_invite(
     .fetch_one(&mut *tx)
     .await
     {
-        Ok(row) => row,
+        Ok(_) => {}
         Err(err) => return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string()),
     };
 
@@ -1156,6 +1192,11 @@ async fn create_game_invite(
         return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string());
     }
 
+    let game = match load_game_response(pool, &game_id).await {
+        Ok(game) => game,
+        Err(err) => return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string()),
+    };
+
     let mut invites = Vec::with_capacity(invite_rows.len());
     for row in invite_rows {
         match invite_from_row(pool, &row).await {
@@ -1167,7 +1208,7 @@ async fn create_game_invite(
     (
         StatusCode::CREATED,
         Json(CreateGameInvitesResponse {
-            game: game_from_row(&game_row),
+            game,
             invites,
         }),
     )
@@ -1603,6 +1644,19 @@ async fn invite_from_row(
     })
 }
 
+async fn load_game_response(pool: &PgPool, game_id: &str) -> Result<GameResponse, sqlx::Error> {
+    let query = format!(
+        r#"
+        {}
+        WHERE g.id = $1::uuid
+        "#,
+        GAME_SELECT_WITH_PROGRESS
+    );
+
+    let row = sqlx::query(&query).bind(game_id).fetch_one(pool).await?;
+    Ok(game_from_row(&row))
+}
+
 fn player_from_row(row: &sqlx::postgres::PgRow) -> PlayerResponse {
     PlayerResponse {
         id: row.get("id"),
@@ -1625,9 +1679,17 @@ fn game_from_row(row: &sqlx::postgres::PgRow) -> GameResponse {
     GameResponse {
         id: row.get("id"),
         owner_player_id: row.get("owner_player_id"),
+        host_player: PublicPlayerResponse {
+            id: row.get("host_player_id"),
+            username: row.get("host_player_username"),
+            display_name: row.get("host_player_display_name"),
+        },
         client_game_type: row.get("client_game_type"),
         status: row.get("status"),
         state: row.get("state"),
+        invited_player_count: row.try_get("invited_player_count").unwrap_or(0),
+        accepted_invited_player_count: row.try_get("accepted_invited_player_count").unwrap_or(0),
+        host_can_start: row.try_get("host_can_start").unwrap_or(false),
         created_at: row.get("created_at"),
         updated_at: row.get("updated_at"),
     }

@@ -1,12 +1,15 @@
 # FriendBox Handoff
 
-This handoff captures the June 14-15, 2026 Android parity session plus the later HUD/touch follow-up that finished the current Android screen-space HUD anchor pass, added `UI::ButtonHold`, introduced Android multi-touch routing controls for onscreen gamepad-style input, the later follow-up that added `UI::Thumbstick`, `Utils::IsAndroid`, a desktop HUD draw-queue separation fix, Android shortest-path angle interpolation parity, and a project setting for engine-level network status popups, the June 16, 2026 follow-up that added the first full turnbased networking stack, string-based save-data nodes, a password-mode `UI::TextInput` editor option, and the later Android packaging fix for `OnTurnBasedGameLoaded`, the June 16-17, 2026 follow-up that restored lost event/network node controls, added `Game::QuitGame`, and made Android packaging self-contained from the built engine executable, the later June 17, 2026 typed-array follow-up that shipped first-class arrays across variables, array nodes, smart-search filtering, and JSON builder parity on desktop and Android, the June 18, 2026 graph/UI follow-up that added `UI::ListBrowser`, fixed `DoOnce`/`Gate` flow-state regressions, and refined the editor graph comment/route UX, the later June 18, 2026 turnbased lifecycle follow-up that added exact-group invite replacement, completed-game removal, stale-game cleanup, global background-color controls, Android/world-viewport rendering fixes, and synced `DeleteGame` / `ResultingStatus` / `OnTurnBasedGameDeleted` behavior across Windows and Android, and the later June 18, 2026 graph/data cleanup follow-up that removed `Array::ToJson` / `Array::FromJson`, moved lightweight save data into a per-game `data` folder with `.DT` files, added graph `G` snap with overlap protection, added comment-corner drop snap, and made blueprint graph drag movement advance in whole grid cells by default.
+This handoff captures the June 14-15, 2026 Android parity session plus the later HUD/touch follow-up that finished the current Android screen-space HUD anchor pass, added `UI::ButtonHold`, introduced Android multi-touch routing controls for onscreen gamepad-style input, the later follow-up that added `UI::Thumbstick`, `Utils::IsAndroid`, a desktop HUD draw-queue separation fix, Android shortest-path angle interpolation parity, and a project setting for engine-level network status popups, the June 16, 2026 follow-up that added the first full turnbased networking stack, string-based save-data nodes, a password-mode `UI::TextInput` editor option, and the later Android packaging fix for `OnTurnBasedGameLoaded`, the June 16-17, 2026 follow-up that restored lost event/network node controls, added `Game::QuitGame`, and made Android packaging self-contained from the built engine executable, the later June 17, 2026 typed-array follow-up that shipped first-class arrays across variables, array nodes, smart-search filtering, and JSON builder parity on desktop and Android, the June 18, 2026 graph/UI follow-up that added `UI::ListBrowser`, fixed `DoOnce`/`Gate` flow-state regressions, and refined the editor graph comment/route UX, the later June 18, 2026 turnbased lifecycle follow-up that added exact-group invite replacement, completed-game removal, stale-game cleanup, global background-color controls, Android/world-viewport rendering fixes, and synced `DeleteGame` / `ResultingStatus` / `OnTurnBasedGameDeleted` behavior across Windows and Android, the later June 18, 2026 graph/data cleanup follow-up that removed `Array::ToJson` / `Array::FromJson`, moved lightweight save data into a per-game `data` folder with `.DT` files, added graph `G` snap with overlap protection, added comment-corner drop snap, and made blueprint graph drag movement advance in whole grid cells by default, and the June 19, 2026 turnbased browser follow-up that split the outer API into its own git repo, added invite progress and host display metadata to the backend game payloads, and updated `UI::GamesBrowser` on desktop and Android to show player-facing title/host/date identity plus a separate pending/active progress line.
 
 ## Repo Context
 
 - Outer workspace: `D:\Studio\CodexFarm\FriendBox`
+- Outer API git repo: `https://github.com/WormJuiceDev/TurnBasedAPI`
 - Engine git repo: `D:\Studio\CodexFarm\FriendBox\FriendBox Engine`
+- Engine git remote: `https://github.com/WormJuiceDev/FriendBoxEngine`
 - Use the engine repo for `git status`, commits, and pushes
+- Use the outer repo for backend/API commits, staging to `\\TRUENAS\FriendBox`, and API pushes
 - Leave `FriendBox Engine/editor_config.json` alone unless explicitly asked
 - Ignore `FriendBox Engine/saves/`
 - Ignore `FriendBox Engine/data/`
@@ -288,6 +291,16 @@ That fix is now in place.
 - declining a pending invite now removes the associated pending invited game on the backend so incomplete required-player groups cannot linger
 - submitting the finishing turn with `resulting_status = "completed"` now removes the game and related invite rows on the backend
 - the outer FriendBox API also now runs a stale-game cleanup loop that removes games untouched for 14 days
+- the outer API repo now has its own standalone git remote at `WormJuiceDev/TurnBasedAPI`, separate from the engine repo
+- `/api/v1/games` and single-game turnbased responses now also include:
+- `host_player`
+- `invited_player_count`
+- `accepted_invited_player_count`
+- `host_can_start`
+- `UI::GamesBrowser` now exposes `IsPending` in addition to `SelectedGameID` / `IsSelected`
+- `UI::GamesBrowser` rows on desktop and Android now show:
+- line 1: game title plus `by Host - Jun 19` on the left, with `pending` / `active` right-aligned
+- line 2: the separate accepted/startability progress line such as `1/1 accepted - host can start`
 - turnbased account auth, profile, player search, invite flow, game load/start flow, and turn submission nodes now exist in the current engine state.
 - the turnbased event set is now cleaned up to one event per async result rather than duplicate alias events.
 - `OnTurnBasedGameLoaded` now carries `GameJson`, `ParticipantsJson`, and `TurnsJson` together.

@@ -2,6 +2,15 @@
 
 FriendBox is an API-only Rust backend for the Android FriendBox client.
 
+## Repo Layout
+
+- Outer repo: `D:\Studio\CodexFarm\FriendBox`
+  This is the standalone TurnBased API repo and now pushes to
+  `https://github.com/WormJuiceDev/TurnBasedAPI`
+- Engine repo: `D:\Studio\CodexFarm\FriendBox\FriendBox Engine`
+  This stays separate and pushes to
+  `https://github.com/WormJuiceDev/FriendBoxEngine`
+
 The backend stores identity, sessions, game records, opaque game state, and
 opaque turn payloads. It does not make game decisions, validate game rules,
 calculate winners, score games, or interpret gameplay JSON.
@@ -192,6 +201,15 @@ List games visible to the current player:
 curl https://friendbox.youworld.app/api/v1/games \
   -H "Authorization: Bearer TOKEN"
 ```
+
+Each game entry now also includes:
+- `host_player`: the public host player object for display purposes
+- `invited_player_count`: how many players were invited into that game group
+- `accepted_invited_player_count`: how many invited players have accepted so far
+- `host_can_start`: whether the host currently has enough accepted players to start the pending game
+
+For the current ruleset, `host_can_start` becomes `true` when the game is still
+`pending` and at least one invited player has accepted.
 
 Fetch one game, its participants, and its turn log:
 
