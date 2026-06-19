@@ -210,7 +210,7 @@ June 18 graph/UI follow-up added after that:
 - `Flow::Gate` no longer crashes the engine in the reported close-loop usage and now only emits `Out` when triggered from `In` while open
 - route nodes in the graph editor now use the revised capsule presentation and easier wire-split placement behavior the user validated during this session
 - comment boxes in the graph editor now support a persisted header-brightness setting, copy/paste of both color and brightness, an opaque header bar, and a zoomed-out title bubble that obeys the same on-screen title-anchor visibility rule as the normal inline title
-- `Implementation.md` was deleted after the array rollout was confirmed complete and should no longer be referenced as an active plan file
+- the old array-rollout `Implementation.md` note is obsolete now that a new `FriendBox Engine\Implementation.md` exists for the sprite multi-graph canvas plan
 
 Later June 18 graph/data cleanup follow-up added after that:
 
@@ -362,12 +362,13 @@ The array rollout that previously lived in `Implementation.md` is now implemente
 - array mutators are now flow-style state-changer nodes with no array output, matching the intended Unreal-style graph tidiness more closely
 - drag-opened smart search is now type-aware for value pins, including array-aware filtering
 - JSON builder support now covers array types and color so the array workflow can move cleanly into/out of JSON payloads
-- `Implementation.md` has now been removed because that rollout is finished; use the committed engine code plus the Android audit/matrix as the current source of truth instead
+- the old array-rollout `Implementation.md` is no longer the relevant reference; use the new `FriendBox Engine\Implementation.md` for the current sprite multi-graph canvas plan instead
 
 Read first next session:
 
 - `D:\Studio\CodexFarm\FriendBox\FriendBox Engine\ANDROID_NODE_LIBRARY_AUDIT.md`
 - `D:\Studio\CodexFarm\FriendBox\FriendBox Engine\ANDROID_VM_SUPPORT_MATRIX.md`
+- `D:\Studio\CodexFarm\FriendBox\FriendBox Engine\Implementation.md`
 
 ## Next Session Start
 
@@ -385,6 +386,16 @@ Then continue from the resolved state above instead of re-opening the old missin
 
 Likely next clean-chat follow-ups after this handoff:
 
+- implementing editor-only multi-graph sprite blueprint canvases from `D:\Studio\CodexFarm\FriendBox\FriendBox Engine\Implementation.md`
+- fixed product rules for that work:
+- use the word `Graph`
+- one real underlying sprite blueprint script remains the runtime source of truth
+- extra graphs are editor canvases only
+- node logic, variables, events, custom events, VM behavior, export, and Android runtime behavior should remain unchanged
+- every sprite starts with one default graph named `Main`
+- deleting a graph should prompt for confirmation even when it contains content
+- graph duplication is not needed
+- search should surface results across all graphs
 - broader device verification of the new Android HUD overlay/touch-routing behavior across a few different phones and aspect ratios
 - broader device verification of the new `UI::Thumbstick` feel and degrees output in real twin-stick gameplay
 - checking whether any remaining anchored HUD widgets or editor previews still assume buffer-space instead of final screen-space on Android
