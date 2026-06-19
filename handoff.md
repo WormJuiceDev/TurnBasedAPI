@@ -13,6 +13,7 @@ This handoff captures the June 14-15, 2026 Android parity session plus the later
 - Leave `FriendBox Engine/editor_config.json` alone unless explicitly asked
 - Ignore `FriendBox Engine/saves/`
 - Ignore `FriendBox Engine/data/`
+- Exception: if the user explicitly approves pushing the full remaining engine worktree, it is allowed to include `FriendBox Engine/editor_config.json`, `FriendBox Engine/saves/`, and `FriendBox Engine/data/` in that commit/push
 
 ## Main Files Touched In This Work
 
