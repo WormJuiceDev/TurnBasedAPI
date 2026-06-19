@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# PROVIDE: friendbox
+# REQUIRE: LOGIN networking
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="friendbox"
+rcvar="friendbox_enable"
+
+# This matches the proven Youniverse service pattern exactly:
+# it runs daemon in foreground mode (-f), and daemon executes the wrapper.
+command="/usr/sbin/daemon"
+command_args="-f /usr/local/bin/run_friendbox.sh"
+
+load_rc_config $name
+run_rc_command "$1"
