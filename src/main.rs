@@ -171,6 +171,14 @@ struct DeletedGameResponse {
     game_id: String,
 }
 
+#[derive(Default)]
+struct ExactGroupGameCandidate {
+    invitee_ids: BTreeSet<String>,
+    status: String,
+    has_non_host_participants: bool,
+    has_turns: bool,
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -1082,27 +1090,28 @@ async fn create_game_invite(
     };
 
     let requested_invitee_set: BTreeSet<String> = invitee_player_ids.iter().cloned().collect();
-    let pending_group_rows = match sqlx::query(
+    let exact_group_rows = match sqlx::query(
         r#"
-        SELECT g.id::text AS game_id, gi.invitee_player_id::text AS invitee_player_id
-        FROM games g
-        LEFT JOIN game_invites gi
-            ON gi.game_id = g.id
-           AND gi.status = 'pending'
-        WHERE g.owner_player_id = $1::uuid
-          AND g.client_game_type = $2
-          AND g.status = 'pending'
-          AND NOT EXISTS (
+        SELECT
+            g.id::text AS game_id,
+            g.status,
+            gi.invitee_player_id::text AS invitee_player_id,
+            EXISTS (
                 SELECT 1
                 FROM game_participants gp
                 WHERE gp.game_id = g.id
                   AND gp.player_id <> g.owner_player_id
-            )
-          AND NOT EXISTS (
+            ) AS has_non_host_participants,
+            EXISTS (
                 SELECT 1
                 FROM turns t
                 WHERE t.game_id = g.id
-            )
+            ) AS has_turns
+        FROM games g
+        LEFT JOIN game_invites gi
+            ON gi.game_id = g.id
+        WHERE g.owner_player_id = $1::uuid
+          AND g.client_game_type = $2
         ORDER BY g.updated_at DESC, g.created_at DESC
         "#,
     )
@@ -1115,27 +1124,40 @@ async fn create_game_invite(
         Err(err) => return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string()),
     };
 
-    let mut pending_groups: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for row in pending_group_rows {
+    let mut exact_group_candidates: BTreeMap<String, ExactGroupGameCandidate> = BTreeMap::new();
+    for row in exact_group_rows {
         let candidate_game_id: String = row.get("game_id");
-        let entry = pending_groups.entry(candidate_game_id).or_default();
+        let entry = exact_group_candidates.entry(candidate_game_id).or_default();
+        entry.status = row.get("status");
+        entry.has_non_host_participants = row.get("has_non_host_participants");
+        entry.has_turns = row.get("has_turns");
         if let Some(invitee_id) = row.get::<Option<String>, _>("invitee_player_id") {
-            entry.insert(invitee_id);
+            entry.invitee_ids.insert(invitee_id);
         }
     }
 
-    let exact_match_game_ids: Vec<String> = pending_groups
-        .into_iter()
-        .filter_map(|(candidate_game_id, invitee_set)| {
-            if invitee_set == requested_invitee_set {
-                Some(candidate_game_id)
-            } else {
-                None
-            }
-        })
-        .collect();
+    let mut replaceable_game_ids = Vec::new();
+    for (candidate_game_id, candidate) in exact_group_candidates {
+        if candidate.invitee_ids != requested_invitee_set {
+            continue;
+        }
 
-    for existing_game_id in exact_match_game_ids {
+        let is_replaceable_pending_lobby = candidate.status == "pending"
+            && !candidate.has_non_host_participants
+            && !candidate.has_turns;
+
+        if is_replaceable_pending_lobby {
+            replaceable_game_ids.push(candidate_game_id);
+            continue;
+        }
+
+        return api_error(
+            StatusCode::CONFLICT,
+            "exact_group_game_already_exists",
+        );
+    }
+
+    for existing_game_id in replaceable_game_ids {
         if let Err(err) = delete_game_records(&mut tx, &existing_game_id).await {
             return api_error(StatusCode::SERVICE_UNAVAILABLE, &err.to_string());
         }

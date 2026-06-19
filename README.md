@@ -159,6 +159,13 @@ This creates one pending game owned by the current player and one pending
 invite for each invited player. For simple two-player flows, the legacy
 `invitee_player_id` field is still accepted.
 
+If the same host creates another invite for the exact same invitee group and
+the same `client_game_type`, the backend only auto-replaces the older game
+when that older game is still a pristine pending lobby with no accepted
+participants and no turns. Once that exact-group game has accepted players or
+becomes active, the host must finish or delete it before creating another game
+for that same exact group.
+
 List pending invites for the current player:
 
 ```sh
