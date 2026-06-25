@@ -210,7 +210,7 @@ June 18 graph/UI follow-up added after that:
 - `Flow::Gate` no longer crashes the engine in the reported close-loop usage and now only emits `Out` when triggered from `In` while open
 - route nodes in the graph editor now use the revised capsule presentation and easier wire-split placement behavior the user validated during this session
 - comment boxes in the graph editor now support a persisted header-brightness setting, copy/paste of both color and brightness, an opaque header bar, and a zoomed-out title bubble that obeys the same on-screen title-anchor visibility rule as the normal inline title
-- the old array-rollout `Implementation.md` note is obsolete now that a new `FriendBox Engine\Implementation.md` exists for the sprite multi-graph canvas plan
+- the old array-rollout `Implementation.md` note is obsolete
 
 Later June 18 graph/data cleanup follow-up added after that:
 
@@ -319,8 +319,25 @@ That fix is now in place.
 - `UI::ListBrowser` is now part of the current engine state on desktop and Android.
 - `Flow::DoOnce` and `Flow::Gate` were rechecked and are now in sync again between desktop and Android for the regression cases exercised this session.
 - the recent graph comment-box and route-node refinements are editor-only and do not require Android runtime parity.
+- editor-only multi-graph sprite blueprint canvases are now integrated in the current editor state.
+- desktop `Touched Actor` / play-mode world mouse mapping now correctly includes the active camera position again instead of treating clicks as camera-zero screen space
 - blueprint graph node dragging and comment-header dragging now move in whole graph-grid cells by default, `G` still exists as a separate explicit snap action, and comment-corner drop snap is now part of the current editor behavior
 - note for future Android follow-up: the new `UI::TextInput` `Password Mode` editor option exists, but the Android runtime still needs an explicit masking/input-type pass if full device parity for masked fields becomes important later.
+- the temporary RustRover `layout.rs` false-error incident during this session was an IDE-version issue rather than a real engine compile failure:
+- the bogus `Default` / `clone` / `iter` errors disappeared after updating from the 2025.1 line to RustRover 2026.1.3
+- the `.idea/FriendBoxEngine.iml` module-root fix is now also in place so the module points at the real project root instead of `.idea`
+- the attempted quick fix for `Call Custom Event -> Target Type` that cloned the full asset library each Blueprint frame should still be treated as rejected architecture
+- the proper editor-side fix is now implemented instead:
+- sprite blueprint editing still removes the active sprite from `project.assets.sprites` during the edit pass
+- the graph editor now restores self-visible sprite lookups through `src/editor/graph/sprite_resolver.rs`
+- `Call Custom Event -> Target Type` now includes the currently edited sprite without per-frame asset-library cloning
+- self-target `Call Custom Event` dynamic pin refresh now resolves through that same resolver path
+- `SpawnActor` exposed-variable refresh for self-target sprite lookups now also resolves through that same resolver path
+- custom-event parameter edits now immediately refresh matching self-target call nodes in the same sprite graph without requiring the old missing-self workaround
+- content-browser plain left click is now selection-only rather than silently swapping the currently open context-sensitive editor
+- the top bar now derives available context-sensitive tabs from the current content-browser selection when one exists
+- the currently open context-sensitive editor tab still renders as fully active even when the browser selection points at another asset type
+- the content browser now supports right click on empty visible browser space to open the asset/folder creation menu
 
 ## Current Documentation State
 
@@ -362,13 +379,13 @@ The array rollout that previously lived in `Implementation.md` is now implemente
 - array mutators are now flow-style state-changer nodes with no array output, matching the intended Unreal-style graph tidiness more closely
 - drag-opened smart search is now type-aware for value pins, including array-aware filtering
 - JSON builder support now covers array types and color so the array workflow can move cleanly into/out of JSON payloads
-- the old array-rollout `Implementation.md` is no longer the relevant reference; use the new `FriendBox Engine\Implementation.md` for the current sprite multi-graph canvas plan instead
+- the old array-rollout `Implementation.md` is no longer relevant and can stay deleted
 
 Read first next session:
 
 - `D:\Studio\CodexFarm\FriendBox\FriendBox Engine\ANDROID_NODE_LIBRARY_AUDIT.md`
 - `D:\Studio\CodexFarm\FriendBox\FriendBox Engine\ANDROID_VM_SUPPORT_MATRIX.md`
-- `D:\Studio\CodexFarm\FriendBox\FriendBox Engine\Implementation.md`
+- `D:\Studio\CodexFarm\FriendBox\handoff.md`
 
 ## Next Session Start
 
@@ -386,16 +403,13 @@ Then continue from the resolved state above instead of re-opening the old missin
 
 Likely next clean-chat follow-ups after this handoff:
 
-- implementing editor-only multi-graph sprite blueprint canvases from `D:\Studio\CodexFarm\FriendBox\FriendBox Engine\Implementation.md`
-- fixed product rules for that work:
-- use the word `Graph`
-- one real underlying sprite blueprint script remains the runtime source of truth
-- extra graphs are editor canvases only
-- node logic, variables, events, custom events, VM behavior, export, and Android runtime behavior should remain unchanged
-- every sprite starts with one default graph named `Main`
-- deleting a graph should prompt for confirmation even when it contains content
-- graph duplication is not needed
-- search should surface results across all graphs
+- broader manual verification of the new `src/editor/graph/sprite_resolver.rs` path across any future sprite-aware graph widgets beyond `Call Custom Event` and `SpawnActor`
+- broader manual verification of the new content-browser / top-bar behavior:
+- plain click should remain selection-only
+- ctrl-click should remain explicit open
+- top-bar context tabs should follow browser selection when one exists
+- the active editor tab should still render fully active while open
+- right click on empty visible content-browser space should continue opening the create menu without stealing right-click asset-card menus
 - broader device verification of the new Android HUD overlay/touch-routing behavior across a few different phones and aspect ratios
 - broader device verification of the new `UI::Thumbstick` feel and degrees output in real twin-stick gameplay
 - checking whether any remaining anchored HUD widgets or editor previews still assume buffer-space instead of final screen-space on Android
@@ -404,3 +418,11 @@ Likely next clean-chat follow-ups after this handoff:
 - if Android login/register UX matters soon, consider finishing full Android `UI::TextInput` password-mode parity so device dialogs and rendered HUD text both mask password fields
 - if array follow-up continues, the likely next cleanup topics are broader array workflow verification, any remaining edge cases in array write-back from more exotic graph chains, and wider runtime testing of typed array JSON round-tripping on Android
 - if graph/editor follow-up continues, the likely next clean topics are broader manual regression testing of the new whole-cell graph drag rule, the `G` snap overlap-protection behavior for larger multi-selections, comment-corner drop snap behavior from all four handles, and any additional small UX polish around graph comments or flow wiring
+
+Latest editor architecture note:
+
+- sprite blueprint editing still removes the active sprite from `project.assets.sprites` during the edit pass
+- the graph editor now restores self-visible sprite lookups through `src/editor/graph/sprite_resolver.rs`
+- future sprite-aware graph widgets and sprite-dependent dynamic pin refresh paths should use that resolver path instead of reading `project.assets.sprites` directly during sprite editing
+- content-browser plain click should stay selection-only while ctrl-click remains the explicit open path
+- top-bar context tabs should prefer the current browser selection when one exists, but the currently open editor mode should still render as the active tab
